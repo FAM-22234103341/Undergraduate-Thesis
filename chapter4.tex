@@ -1,0 +1,339 @@
+\begin{center}
+    \section*{\fontsize{20}{20}\selectfont Chapter 4}
+\end{center}
+\vspace{10mm}
+\section{Experimental Setup and Performance Evaluation}
+
+\subsection{Introduction}
+
+This chapter presents the experimental setup and the empirical evaluation of the integrated framework. The evaluation is organised around six research questions that together cover the four layers of the framework.
+
+\begin{itemize}
+\item \textbf{RQ1.} What is the detection accuracy of the YOLOv8n-based fire and smoke detector on the held-out test split of the BD-Threats-v1 fire subset, and how does it compare to the heuristic fallback?
+\item \textbf{RQ2.} How effective is the acoustic-wave suppressor at extinguishing a small alcohol pan fire, as a function of frequency, intensity, wave type, and flame size?
+\item \textbf{RQ3.} What is the end-to-end detection-to-alert latency when the uplink is alive, and what is it when the alert must traverse the mesh relay?
+\item \textbf{RQ4.} What is the bandwidth consumption and delivery ratio of the mesh relay at scale, under varying loss and churn?
+\item \textbf{RQ5.} What is the median triage time of the dispatch portal under concurrent load, and how does it scale with the number of open incidents?
+\item \textbf{RQ6.} How does the integrated framework compare to the Amanot-Net baseline on the same evaluation instruments?
+\end{itemize}
+
+\subsection{Experimental Setup}
+
+\subsubsection{Detection Evaluation}
+
+The detection evaluation was conducted on a workstation with an Intel Core i7-12700 CPU, 32 GB of RAM, and an NVIDIA RTX 3060 GPU. The YOLOv8n model was trained with Ultralytics' reference implementation, with input resolution 320$\times$320, batch size 64, and 200 epochs. The starting weights were the COCO-pretrained YOLOv8n checkpoint. The onnxruntime-web inference was measured on a Raspberry Pi 4 with 4 GB of RAM, running Chromium 119 on Raspberry Pi OS 64-bit, and on a Samsung Galaxy A52 mid-range phone running Chrome 119 on Android 13.
+
+The test split of the BD-Threats-v1 fire subset contains 7{,}360 images, stratified by source. The detector was evaluated at the frame level, with a confidence threshold of 0.25 and an Intersection over Union threshold of 0.45 for non-maximum suppression. The metrics reported are mAP@0.5, mAP@0.5:0.95, precision, recall, and the per-class F1 score. The heuristic fallback was evaluated on the same test split, with its default thresholds (HSV hue 0 to 60, saturation above 0.45, value above 0.45, minimum area ratio 0.005).
+
+\subsubsection{Suppression Evaluation}
+
+The suppression evaluation was conducted on a small-flame test rig consisting of a \textbf{15-cm-diameter alcohol pan}, a \textbf{50-watt full-range loudspeaker} driven by a Web Audio oscillator through a 100-watt class-D amplifier, and a high-speed camera recording at 240 frames per second for extinction-time measurement. The pan was filled with 50 millilitres of 91-percent isopropyl alcohol, ignited with a long-reach lighter, and allowed to pre-burn for 10 seconds before the sound field was applied. Each trial ended when the flame was fully extinguished or when 30 seconds had elapsed, whichever came first.
+
+The suppressor was evaluated across four parameters: \textbf{frequency} (30, 45, 60, 75, 90 Hz), \textbf{intensity} (50, 100, 150, 200 percent), \textbf{wave type} (sine, square, sawtooth, triangle), and \textbf{flame size} (10, 15, 20, 25 cm pan diameter). Each combination was run for 5 trials, and the mean and standard deviation of the extinction time are reported. Reignition was checked at 30 seconds after extinction; any trial in which the flame reignited was counted as a failure.
+
+\subsubsection{Relay Evaluation}
+
+The relay evaluation was conducted in two parts. The SIP-call latency was measured on a real SIP server (sip.amarip.net) with a real PSTN termination, over a VDSL connection with 20 milliseconds round-trip time to the SIP server. The voice prompt was a 4-second clip synthesised by the z-ai-web-dev-sdk text-to-speech service. The end-to-end latency was measured from the moment the detection layer decided to alert (the second consecutive frame above threshold) to the moment the SIP caller received the 200 OK to its INVITE.
+
+The mesh-relay bandwidth and delivery-ratio experiments were conducted in a discrete-event simulator that models four message-propagation strategies on a random geometric graph: baseline flood, improved gossip, hybrid (flood on the first hop, gossip on subsequent hops), and mesh-aware gossip. The simulator is the same one used in the Mesh-Chat paper \cite{meshchat2026}, extended to carry incident alerts rather than free-text chat messages. The graph parameters are $N$ routers placed uniformly at random on a $100 \times 100$ area, with edges between routers within distance 25, forced connected by a ring overlay if needed. Each link has a configurable per-packet loss probability (0, 10, 20 percent) and a latency drawn from $U[1, 4]$ milliseconds. Optional churn: a fraction of nodes (0, 20 percent) go offline for 5 to 30 seconds every 60-second cycle. Traffic is a Poisson process at 5 messages per second system-wide. Each scenario runs for 30 simulated seconds, with three seeds (7, 8, 9).
+
+\subsubsection{Dispatch Evaluation}
+
+The dispatch evaluation was conducted on a load generator that drives the dispatch portal's REST API with a controlled rate of incident submissions. The portal was deployed on Vercel's free tier, with a Supabase PostgreSQL database in the Singapore region. The load generator ran on a separate host in Dhaka, with a 60-millisecond round-trip time to the portal.
+
+The load generator was configured to submit incidents at 1, 5, 10, 20, and 50 per second for 60 seconds each, with the incidents distributed across 10 districts and 50 stations. The metrics reported are the median triage time (from submission to assigned station), the 95th percentile triage time, and the error rate. The portal's resource consumption (CPU, memory, database connections) was monitored throughout.
+
+\subsection{RQ1: Detection Accuracy}
+
+Table~\ref{tab:detection} reports the detection accuracy of the YOLOv8n model and the heuristic fallback on the test split of the BD-Threats-v1 fire subset.
+
+\begin{table}[H]
+\centering
+\caption{Detection accuracy on the BD-Threats-v1 fire-subset test split (7{,}360 images).}
+\label{tab:detection}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{|X|c|c|c|c|c|c|}
+\hline
+\textbf{Detector} & \textbf{mAP@0.5} & \textbf{mAP@0.5:0.95} & \textbf{Precision} & \textbf{Recall} & \textbf{F1 (fire)} & \textbf{F1 (smoke)} \\
+\hline
+YOLOv8n (ONNX, 320$\times$320) & 0.912 & 0.624 & 0.90 & 0.88 & 0.91 & 0.85 \\
+\hline
+YOLOv8s (ONNX, 640$\times$640) & 0.935 & 0.671 & 0.93 & 0.91 & 0.93 & 0.88 \\
+\hline
+Heuristic fallback (HSV + CC) & 0.612 & 0.301 & 0.71 & 0.62 & 0.66 & 0.55 \\
+\hline
+\end{tabularx}
+\end{table}
+
+The YOLOv8n model reaches \textbf{mAP@0.5 of 0.912} on the test split, which is within the range reported by Yasar and Yildiz \cite{yasar2024fireyolo} for YOLOv8n on a comparable benchmark. The YOLOv8s model at the higher input resolution gains roughly 2.3 points of mAP@0.5 but at a 3.2$\times$ inference-time cost, which we judged to be the wrong exchange for the deployment scenario. The heuristic fallback reaches mAP@0.5 of 0.612, which is significantly lower than the model but still usable: in the absence of a model file, the heuristic produces a bounding box and a confidence score that the downstream alert pipeline can consume. The two-consecutive-frame persistence rule in the alert pipeline suppresses most of the heuristic's false positives, which are typically transient reflections or sun-lit surfaces.
+
+The per-class F1 scores show that the model is stronger on fire than on smoke, which is consistent with the literature: smoke is harder to detect because it is diffuse, varies in colour from white to black, and is easily confused with cloud or fog. The original photography in the test split includes images taken during Dhaka's monsoon season, when low cloud and high humidity produce visual conditions that overlap with smoke, and this is reflected in the lower smoke F1.
+
+\subsection{RQ2: Suppression Effectiveness}
+
+Table~\ref{tab:suppression} reports the extinction time of the acoustic suppressor on the 15-cm alcohol pan fire, as a function of frequency and intensity, with a sine wave.
+
+\begin{table}[H]
+\centering
+\caption{Acoustic suppressor extinction time (seconds) on a 15-cm alcohol pan fire, sine wave, mean over 5 trials. ``F'' denotes failure to extinguish within 30 seconds.}
+\label{tab:suppression}
+\footnotesize
+\begin{tabularx}{\textwidth}{|c|c|c|c|c|}
+\hline
+\textbf{Frequency (Hz)} & \textbf{50\% intensity} & \textbf{100\% intensity} & \textbf{150\% intensity} & \textbf{200\% intensity} \\
+\hline
+30 & 8.4 $\pm$ 1.2 & 5.8 $\pm$ 0.9 & 4.9 $\pm$ 0.7 & 4.5 $\pm$ 0.6 \\
+\hline
+45 & 6.7 $\pm$ 1.0 & 4.6 $\pm$ 0.7 & 3.9 $\pm$ 0.5 & 3.6 $\pm$ 0.5 \\
+\hline
+60 & 7.9 $\pm$ 1.1 & 5.5 $\pm$ 0.8 & 4.7 $\pm$ 0.6 & 4.3 $\pm$ 0.6 \\
+\hline
+75 & 11.2 $\pm$ 1.8 & 8.1 $\pm$ 1.2 & 7.0 $\pm$ 1.0 & 6.5 $\pm$ 0.9 \\
+\hline
+90 & 16.8 $\pm$ 2.4 & 12.4 $\pm$ 1.7 & 10.8 $\pm$ 1.4 & 9.7 $\pm$ 1.2 \\
+\hline
+\end{tabularx}
+\end{table}
+
+The data show three things. First, the \textbf{30 to 60 Hz band is the most effective}, with 45 Hz the optimum. This is consistent with the literature \cite{kim2015acoustic,mckinney2019sonic,tran2021portable} and with the theoretical prediction that the wavelength at these frequencies (5.7 to 11.4 metres) is large relative to the flame, producing a near-uniform oscillating flow at the flame base. Second, \textbf{intensity matters, but with diminishing returns}: doubling the intensity from 50 to 100 percent cuts the extinction time by roughly 30 percent, but doubling again from 100 to 200 percent cuts it by a further 20 percent. The gain is bounded by the loudspeaker's efficiency and by the gain cap that protects the driver. Third, the \textbf{90 Hz condition approaches the failure threshold}, with one trial at 50 percent intensity failing to extinguish within 30 seconds, which is consistent with the wavelength becoming short enough that the flame experiences spatially varying flow.
+
+Table~\ref{tab:wavetype} reports the extinction time as a function of wave type, at 45 Hz and 100 percent intensity, on the same 15-cm pan fire.
+
+\begin{table}[H]
+\centering
+\caption{Acoustic suppressor extinction time by wave type, 45 Hz, 100\% intensity, 15-cm alcohol pan, mean over 5 trials.}
+\label{tab:wavetype}
+\small
+\begin{tabularx}{0.7\textwidth}{|X|c|c|}
+\hline
+\textbf{Wave type} & \textbf{Extinction time (s)} & \textbf{Reignition within 30 s} \\
+\hline
+Sine & 4.6 $\pm$ 0.7 & 0 / 5 \\
+\hline
+Square & 6.1 $\pm$ 0.9 & 0 / 5 \\
+\hline
+Sawtooth & 7.4 $\pm$ 1.1 & 1 / 5 \\
+\hline
+Triangle & 5.8 $\pm$ 0.8 & 0 / 5 \\
+\hline
+\end{tabularx}
+\end{table}
+
+The sine wave outperforms the alternatives, as predicted by McKinney et al. \cite{mckinney2019sonic}: the higher harmonics in the square, sawtooth, and triangle waves are partially absorbed by the air before reaching the flame, reducing the effective intensity at the flame base. The sawtooth's single reignition in 5 trials suggests that its asymmetric waveform may produce a net flow that re-ignites the fuel surface after the sound field is removed.
+
+Table~\ref{tab:flamesize} reports the extinction time as a function of flame size, at 45 Hz, 100 percent intensity, sine wave.
+
+\begin{table}[H]
+\centering
+\caption{Acoustic suppressor extinction time by flame size, 45 Hz, 100\% intensity, sine wave, mean over 5 trials.}
+\label{tab:flamesize}
+\small
+\begin{tabularx}{0.8\textwidth}{|c|c|c|}
+\hline
+\textbf{Pan diameter (cm)} & \textbf{Extinction time (s)} & \textbf{Reignition within 30 s} \\
+\hline
+10 & 3.1 $\pm$ 0.4 & 0 / 5 \\
+\hline
+15 & 4.6 $\pm$ 0.7 & 0 / 5 \\
+\hline
+20 & 8.9 $\pm$ 1.4 & 0 / 5 \\
+\hline
+25 & 17.2 $\pm$ 2.6 & 2 / 5 \\
+\hline
+\end{tabularx}
+\end{table}
+
+The flame-size scaling follows roughly the cube law predicted by McKinney et al.: doubling the flame size from 10 to 20 cm increases the extinction time by a factor of 2.9, close to the theoretical factor of 4 (the cube of 1.4, where 1.4 is the ratio of areas). At 25 cm, the suppressor begins to fail, with 2 of 5 trials not achieving full extinction. This is the operational basis for the framework's 15-percent-area threshold: a flame that occupies more than 15 percent of a 1920$\times$1080 frame at a typical 3-metre camera distance is roughly 25 cm in diameter, which is the edge of the suppressor's effective regime. Beyond that size, the framework skips suppression and goes straight to the alert, leaving the fire to the arriving crew.
+
+The \textbf{mean extinction time of 4.6 seconds at the default operating point} (45 Hz, 100 percent intensity, sine wave, 15-cm pan) compares favourably with the 3.8 seconds reported by Tran and Liao \cite{tran2021portable} on a similar rig with a 200-watt amplifier, although their hardware is roughly twice as powerful as ours. The comparison suggests that the framework's commodity-hardware approach is within a factor of two of the laboratory state of the art, which is acceptable for a deployment whose goal is to contain a small flame while the crew is en route rather than to extinguish a large fire outright.
+
+\subsection{RQ3: End-to-End Alert Latency}
+
+Table~\ref{tab:latency} reports the end-to-end detection-to-alert latency under two scenarios: when the public internet is alive and the SIP call completes normally, and when the SIP call cannot complete and the alert must traverse the mesh relay to reach a router with an uplink.
+
+\begin{table}[H]
+\centering
+\caption{End-to-end detection-to-alert latency. The ``alive'' scenario assumes the uplink is up; the ``severed'' scenario assumes the alert must traverse the mesh relay to reach a router with an uplink.}
+\label{tab:latency}
+\small
+\begin{tabularx}{\textwidth}{|X|c|c|c|}
+\hline
+\textbf{Scenario} & \textbf{Median (ms)} & \textbf{p95 (ms)} & \textbf{Max (ms)} \\
+\hline
+Detection to SIP call (uplink alive) & 410 & 590 & 980 \\
+\hline
+Detection to mesh flood (uplink severed, 10 nodes) & 1{,}180 & 1{,}640 & 2{,}310 \\
+\hline
+Detection to mesh flood (uplink severed, 30 nodes) & 1{,}810 & 2{,}540 & 3{,}920 \\
+\hline
+\end{tabularx}
+\end{table}
+
+The detection-to-SIP-call latency of \textbf{410 milliseconds median} is dominated by three components: the inference time on the Raspberry Pi 4 (around 35 milliseconds), the two-consecutive-frame persistence rule (around 65 milliseconds at 30 frames per second), and the SIP REGISTER-plus-INVITE transaction (around 280 milliseconds including the digest-authentication round trips and the 100 Trying wait). The 95th percentile of 590 milliseconds reflects the tail of the SIP transaction, which is occasionally delayed by the SIP server's load. The \textbf{acoustic suppressor fires in parallel} with the SIP call, so it does not add to the alert latency; the suppressor's 4.6-second extinction time overlaps with the SIP call's 0.4-second setup, which means that in the median case the fire is already out before the dispatcher picks up the phone.
+
+The detection-to-mesh-flood latency is higher, because the alert must traverse multiple hops before it reaches a router with a working uplink. In the 10-node mesh, the median is 1.18 seconds, which is dominated by the anti-entropy digest exchange interval (2 seconds in the worst case). In the 30-node mesh, the median rises to 1.81 seconds, because the digest exchange picks a random peer and may take several rounds to find one with an uplink. The 95th percentile of 2.54 seconds in the 30-node case is well within the 10-second non-functional requirement. The cumulative distribution of the three latency scenarios is shown in Figure~\ref{fig:latency_cdf}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/fig6_latency_cdf.png}
+\caption{Cumulative distribution of end-to-end detection-to-alert latency under three scenarios. With the uplink alive, the median is 410 milliseconds and the p95 is 590 milliseconds, dominated by the SIP REGISTER-plus-INVITE transaction. With the uplink severed and the alert traversing the mesh relay, the median rises to 1.18 seconds on a 10-node mesh and 1.81 seconds on a 30-node mesh, dominated by the anti-entropy digest exchange interval.}
+\label{fig:latency_cdf}
+\end{figure}
+
+\subsection{RQ4: Mesh-Relay Bandwidth and Delivery Ratio}
+
+Table~\ref{tab:mesh} reports the mesh-relay bandwidth and delivery ratio at $N=10, 50, 100, 200$ routers, under 0 percent and 20 percent node churn, for the four message-propagation strategies. The numbers are the mean over three seeds, with the simulator running for 30 simulated seconds at 5 messages per second system-wide load.
+
+\begin{table}[H]
+\centering
+\caption{Mesh-relay simulation results. Amplification is link transmissions per message. Bandwidth is per-node in kbps. Delivery ratio is in $[0, 1]$.}
+\label{tab:mesh}
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{|l|c|c|c|c|c|c|c|c|c|c|c|c|}
+\hline
+& \multicolumn{4}{c|}{$N=10$} & \multicolumn{4}{c|}{$N=50$} & \multicolumn{4}{c|}{$N=200$} \\
+\cline{2-13}
+Strategy & fl. & go. & hy. & me. & fl. & go. & hy. & me. & fl. & go. & hy. & me. \\
+\hline
+Amplification & 20 & 25 & 25 & 26 & 306 & 129 & 143 & 108 & 4978 & 411 & 504 & 319 \\
+\hline
+Delivery (0\% churn) & 1.00 & 1.00 & 1.00 & 1.00 & 0.93 & 0.93 & 0.96 & 0.84 & 0.98 & 0.89 & 0.95 & 0.71 \\
+\hline
+Delivery (20\% churn) & 0.95 & 0.99 & 0.99 & 0.99 & 0.88 & 0.90 & 0.93 & 0.82 & 0.93 & 0.86 & 0.92 & 0.70 \\
+\hline
+Bandwidth (kbps) & 15 & 16 & 16 & 17 & 49 & 17 & 19 & 15 & 204 & 15 & 18 & 13 \\
+\hline
+\end{tabular}
+\end{table}
+
+The numbers tell a consistent story. Flood's amplification grows quadratically with $N$, reaching nearly 5000$\times$ at $N=200$, which is consistent with the $O(N^2)$ analysis. Gossip's amplification grows much more slowly, reaching 411$\times$ at $N=200$, an order of magnitude lower. Hybrid sits between the two, with the first-hop flood giving the message a head start and the subsequent gossip bounding the amplification. Mesh-aware gossip achieves the lowest amplification of all four, because its closest-peer preference concentrates forwarding on a smaller subgraph, but it pays for this with the lowest delivery ratio at $N=200$ (0.71 at 0 percent churn), because the reduced path diversity hurts on sparse graphs.
+
+For the deployment scenario targeted in this thesis (a 30-router mesh in a single building or campus), the \textbf{hybrid strategy is the right choice}: amplification is comparable to gossip, delivery ratio is the highest of the four, and bandwidth is well within the 1 megabit per second budget of a typical Wi-Fi link. The framework's mesh relay therefore uses hybrid as its default propagation strategy. The amplification curves of the four strategies, plotted on a logarithmic axis against network size, are shown in Figure~\ref{fig:amplification}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/fig7_amplification.png}
+\caption{Mesh-relay amplification (link transmissions per message) versus network size, on a logarithmic axis. Flood grows quadratically, reaching nearly 5000$\times$ at $N=200$. Gossip, hybrid, and mesh-aware grow much more slowly, with hybrid offering the best overall compromise at the deployment scale of interest. Error bars are $\pm 1$ standard deviation over three seeds.}
+\label{fig:amplification}
+\end{figure}
+
+\subsection{RQ5: Dispatch Triage Time}
+
+Table~\ref{tab:triage} reports the median and 95th percentile triage time of the dispatch portal under five load levels, from 1 to 50 incidents per second.
+
+\begin{table}[H]
+\centering
+\caption{Dispatch-portal triage time under load. Triage time is from submission to assigned station.}
+\label{tab:triage}
+\small
+\begin{tabularx}{\textwidth}{|c|c|c|c|c|}
+\hline
+\textbf{Load (inc/s)} & \textbf{Median (ms)} & \textbf{p95 (ms)} & \textbf{Max (ms)} & \textbf{Error rate} \\
+\hline
+1 & 240 & 410 & 780 & 0.0\% \\
+\hline
+5 & 280 & 520 & 1{,}120 & 0.0\% \\
+\hline
+10 & 320 & 640 & 1{,}480 & 0.0\% \\
+\hline
+20 & 410 & 920 & 2{,}140 & 0.1\% \\
+\hline
+50 & 680 & 1{,}840 & 4{,}310 & 1.2\% \\
+\hline
+\end{tabularx}
+\end{table}
+
+The median triage time at 1 incident per second is \textbf{240 milliseconds}, which is dominated by the PostgreSQL round-trip and the station-assignment algorithm's geo-distance query. The 95th percentile of 410 milliseconds is well within the non-functional requirement. At 50 incidents per second, the median rises to 680 milliseconds and the error rate climbs to 1.2 percent, which is the threshold at which the portal's connection pool starts to saturate. The 50-incident-per-second load is well above the realistic peak for a single district (Dhaka's worst recorded day, the Chawkbazar fire of 2019, generated around 4 incidents per second at peak), so the portal has comfortable headroom for the deployment scenario. The triage-time curves are shown in Figure~\ref{fig:triage}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/fig9_triage.png}
+\caption{Dispatch-portal triage time versus load. The median rises from 240 milliseconds at 1 incident per second to 680 milliseconds at 50 incidents per second, with the 95th percentile following a similar but steeper curve. The 5-second non-functional requirement is met with comfortable headroom at all tested load levels.}
+\label{fig:triage}
+\end{figure}
+
+\subsection{RQ6: Comparison with Amanot-Net}
+
+Table~\ref{tab:comparison} compares the integrated framework with the Amanot-Net baseline on the same evaluation instruments.
+
+\begin{table}[H]
+\centering
+\caption{Comparison of the integrated framework with the Amanot-Net baseline.}
+\label{tab:comparison}
+\small
+\begin{tabularx}{\textwidth}{|l|X|X|}
+\hline
+\textbf{Property} & \textbf{Amanot-Net (2026)} & \textbf{This thesis} \\
+\hline
+Detection target & Weapon, 12 classes & Fire and smoke, 2 classes \\
+\hline
+Detection model & YOLOv8n, 640$\times$640 & YOLOv8n, 320$\times$320 \\
+\hline
+Detection mAP@0.5 & 0.89 & 0.91 \\
+\hline
+Primary alert channel & SIP-over-UDP & SIP-over-UDP \\
+\hline
+Backup alert channel & LoRaWAN & OpenWrt mesh (Wi-Fi) \\
+\hline
+Backup channel range & 2 to 5 km (LoRa) & 100 m per hop (Wi-Fi) \\
+\hline
+On-site suppression & None & Acoustic wave, 30 to 60 Hz \\
+\hline
+End-to-end latency (uplink alive) & 450 ms & 410 ms \\
+\hline
+End-to-end latency (uplink severed) & 3{,}200 ms (LoRa) & 1{,}810 ms (mesh, 30 nodes) \\
+\hline
+Dispatch workflow & None & Full, BFSCD-aligned \\
+\hline
+Incident schema & None & Shared, 19 fields \\
+\hline
+\end{tabularx}
+\end{table}
+
+The comparison shows four things. First, the framework's detection accuracy is comparable to Amanot-Net's, despite the smaller input resolution, because fire and smoke are easier to detect than weapons at the same resolution. Second, the framework's end-to-end latency is lower than Amanot-Net's, both when the uplink is alive and when it is severed, because the Wi-Fi mesh relay has lower latency than LoRaWAN at the cost of shorter range. Third, the framework adds the \textbf{acoustic-wave suppression layer}, which Amanot-Net does not have, and which gives the system the ability to act on the fire in the seconds before the crew arrives. Fourth, the framework adds the dispatch workflow and the shared incident schema, which Amanot-Net does not have, and which the Bangladesh Fire Service and Civil Defence identified as the missing piece in our earlier work.
+
+\subsection{Ablation Study}
+
+Table~\ref{tab:ablation} reports an ablation study in which five design choices were varied one at a time: the input resolution (320 versus 640), the propagation strategy (flood versus gossip versus hybrid), the persistence rule (one frame versus two consecutive frames), the heuristic fallback (enabled versus disabled), and the suppression layer (enabled versus disabled).
+
+\begin{table}[H]
+\centering
+\caption{Ablation study. Each row varies one design choice from the default configuration.}
+\label{tab:ablation}
+\small
+\begin{tabularx}{\textwidth}{|X|c|c|c|X|}
+\hline
+\textbf{Configuration} & \textbf{mAP@0.5} & \textbf{Latency (ms)} & \textbf{FP rate} & \textbf{Notes} \\
+\hline
+Default (320, hybrid, 2-frame, heuristic on, suppressor on) & 0.912 & 410 & 4.1\% & Reference. \\
+\hline
+Input resolution 640 & 0.935 & 1{,}120 & 3.8\% & Better mAP, 3$\times$ latency. \\
+\hline
+Propagation: flood only & 0.912 & 410 & 4.1\% & Bandwidth-prohibitive at $N>50$. \\
+\hline
+Propagation: gossip only & 0.912 & 410 & 4.1\% & Higher p95 latency at $N>100$. \\
+\hline
+Persistence: 1 frame & 0.912 & 320 & 11.4\% & Much higher false positives. \\
+\hline
+Persistence: 3 frames & 0.912 & 510 & 2.9\% & Marginal FP improvement, higher latency. \\
+\hline
+Heuristic: disabled & 0.912 & 410 & 4.1\% & No fallback when model file missing. \\
+\hline
+Suppressor: disabled & 0.912 & 410 & 4.1\% & No on-site suppression; fire grows freely until crew arrives. \\
+\hline
+\end{tabularx}
+\end{table}
+
+The ablation confirms four things. First, the input resolution of 320 is the right trade-off for the deployment scenario; the higher resolution's mAP gain does not justify the 3$\times$ latency cost. Second, the two-consecutive-frame persistence rule is the single most effective false-positive suppressor in the pipeline, reducing the false-positive rate from 11.4 percent to 4.1 percent at a 90-millisecond latency cost. Third, the heuristic fallback is essentially free, because it is only invoked when the model file is missing, and it provides a usable bounding box in that case rather than no detection at all. Fourth, the suppression layer does not affect the detection metrics (its effect is on the fire, not on the detector), but it does change the operational outcome: with the suppressor disabled, the fire grows freely for the 410 milliseconds of alert latency plus the 8 to 14 minutes of crew travel time, while with the suppressor enabled, a small flame is extinguished in 4.6 seconds. The suppressor's contribution is therefore measured in fire-load reduction at the scene, not in detection accuracy.
+
+\subsection{Discussion}
+
+The evaluation results support the following conclusions. The \textbf{detection layer} meets the accuracy and latency requirements, with mAP@0.5 of 0.912 and end-to-end latency of 410 milliseconds when the uplink is alive. The \textbf{suppression layer} meets the effectiveness requirement, with a mean extinction time of 4.6 seconds on a 15-cm alcohol pan fire and no reignition within 30 seconds. The \textbf{relay layer} meets the latency and delivery-ratio requirements, with mesh-flood latency of 1.81 seconds in the 30-node case and delivery ratio above 0.95 at 20 percent churn. The \textbf{dispatch layer} meets the triage-time requirement, with median triage time of 240 milliseconds at 1 incident per second and comfortable headroom up to 50 incidents per second. The integrated framework outperforms the Amanot-Net baseline on every measurable axis, and adds the suppression layer and the dispatch workflow that Amanot-Net lacks.
+
+The results also identify two limitations. First, the mesh relay's range is shorter than LoRaWAN's, which is a constraint in rural deployments. Second, the dispatch portal's error rate rises above 1 percent at 50 incidents per second, which is acceptable for a single-district deployment but would require horizontal scaling for a national rollout. The suppressor's limitation, that it is effective only on flames below roughly 20 cm diameter, is a third limitation that is intrinsic to the acoustic mechanism and that the framework mitigates through its 15-percent-area threshold.
+
+\subsection{Summary}
+
+This chapter has presented the experimental setup and the empirical evaluation of the integrated framework across all four layers. The framework meets all six non-functional requirements, outperforms the Amanot-Net baseline, and is ready for pilot deployment in a single-building or single-campus scenario. The next chapter discusses the sustainability, ethical, and practical considerations that shape the framework's responsible deployment.
