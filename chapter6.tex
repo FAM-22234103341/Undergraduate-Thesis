@@ -1,0 +1,54 @@
+\begin{center}
+    \section*{\fontsize{20}{20}\selectfont Chapter 6}
+\end{center}
+\vspace{10mm}
+\section{Conclusion}
+
+\subsection{Summary of the Work}
+
+This thesis has presented an integrated framework for autonomous threat detection, on-site acoustic suppression, network-independent alert relay, and emergency dispatch coordination, applied to the fire-response domain in Bangladesh. The framework has four layers. The \textbf{detection layer} runs a YOLOv8n model exported to ONNX inside a web browser through onnxruntime-web, with a color-space and connected-component heuristic as fallback when no model is available. The \textbf{suppression layer} drives a Web Audio oscillator in the 30 to 60 Hz band through a public-address loudspeaker, with a 10-second maximum duration and a 15-percent-area trigger threshold. The \textbf{relay layer} pairs a SIP-over-UDP voice call to the on-call responder with a peer-to-peer mesh of OpenWrt routers that floods compact JSON alerts across the local network. The \textbf{dispatch layer} is a Next.js web portal that mirrors the operational practice of the Bangladesh Fire Service and Civil Defence, with district-based station assignment, multi-agency escalation, and a citizen-facing SOS channel.
+
+The framework was evaluated on a 73{,}600-image fire and smoke subset of the BD-Threats-v1 corpus, on a small-flame suppression rig, on a 30-node mesh testbed, and on a dispatch portal under simulated concurrent load. The YOLOv8n model reached \textbf{mAP@0.5 of 0.91} on the test split at 28 frames per second on a Raspberry Pi 4. The acoustic suppressor extinguished a 15-cm alcohol pan fire in a mean of \textbf{4.6 seconds at 45 Hz and 100 percent intensity}, with no reignition within 30 seconds. The end-to-end detection-to-alert latency was \textbf{410 milliseconds} when the uplink was alive and \textbf{1.81 seconds} when the alert had to traverse the 30-node mesh. The mesh relay achieved a delivery ratio above 0.95 at 20 percent node churn with the hybrid propagation strategy. The dispatch portal handled 50 incidents per second with a median triage time of 680 milliseconds and an error rate of 1.2 percent. The framework outperformed the Amanot-Net baseline on every measurable axis and added the suppression layer and the dispatch workflow that Amanot-Net lacked.
+
+The work extends the Amanot-Net project, which targeted weapon detection in public spaces, in three directions. First, it replaces the LoRaWAN backup channel with an OpenWrt mesh relay that reuses the local Wi-Fi spectrum and the routers that the building already owns. Second, it adds the \textbf{acoustic-wave suppression layer}, which acts on the fire in the seconds between detection and crew arrival, the window in which a small flame is most easily extinguished. Third, it adds the dispatch workflow on top of the alert, treating the dispatch layer as a first-class component of the framework rather than as an external system. The integrated framework is the result of taking the Bangladesh Fire Service and Civil Defence's feedback on Amanot-Net seriously: the detection was useful, the alert was useless if it did not enter the dispatch workflow, and a fire that grew for ten minutes while the crew was en route was a fire that had already won. The framework in this thesis is the response to that feedback.
+
+\subsection{Limitations}
+
+The framework has five limitations that should be acknowledged.
+
+First, the \textbf{mesh relay's range} is shorter than LoRaWAN's. A Wi-Fi mesh covers a single building or campus; a LoRaWAN gateway can cover several kilometres. For rural deployments, where the nearest fire station is kilometres away, the Wi-Fi mesh is the wrong choice and a LoRaWAN or NB-IoT backup should be substituted. The framework's modular design allows this substitution without changing the detection, suppression, or dispatch layers, but the substitution has not been implemented in this thesis.
+
+Second, the \textbf{acoustic suppressor's effective regime} is bounded by flame size. The 15-cm alcohol pan fire is well within the suppressor's regime; a 25-cm pan fire is at the edge, and a room-scale fire is well beyond it. The 15-percent-area threshold in the detection pipeline is a heuristic that distinguishes the two cases, but it is not perfect. A flame that is small in the frame but large in reality (because the camera is far away) may be wrongly suppressed, and a flame that is large in the frame but small in reality (because the camera is close) may be wrongly skipped. A future version of the framework should combine the bounding-box area with a depth estimate to improve the size classification.
+
+Third, the \textbf{detection layer} has not been stress-tested against adversarial attacks. An adversary who knows the model's architecture and weights could in principle craft an input that evades detection, although the practical relevance of this attack to fire response is limited. Adversarial hardening is left to future work.
+
+Fourth, the \textbf{dispatch layer's error rate} of 1.2 percent at 50 incidents per second is acceptable for a single district but would require horizontal scaling for a national rollout. The Prisma-managed PostgreSQL backend can be sharded by district, but the sharding has not been implemented in the prototype.
+
+Fifth, the framework's \textbf{privacy guarantee} is a design choice rather than an enforced constraint. The detection layer discards video frames after inference, but there is no technical mechanism that prevents a future modification from logging the frames. A production deployment should add an audit log that records every frame access and every model invocation, so that any future modification that violates the privacy guarantee is detectable.
+
+\subsection{Future Work}
+
+The framework suggests five directions for future work.
+
+The first direction is the \textbf{substitution of the mesh relay with a LoRaWAN or NB-IoT backup} for rural deployments. The substitution is straightforward in principle, because the relay layer's interface to the detection and dispatch layers is a JSON incident object, but the engineering work to integrate a LoRaWAN gateway and to handle the longer round-trip time is non-trivial.
+
+The second direction is the \textbf{extension of the suppression layer to larger flames}. The current suppressor is effective on flames up to roughly 20 cm diameter. Larger flames would require a larger loudspeaker, a more powerful amplifier, and possibly an array of loudspeakers to cohere the sound field at the flame. The cube-law scaling identified by McKinney et al. \cite{mckinney2019sonic} suggests that a 50-cm flame would require roughly 8 times the acoustic power, which is within the range of professional audio hardware but well beyond the commodity hardware used in this thesis.
+
+The third direction is the \textbf{extension of the detection layer to additional threat types}. The framework's incident schema already supports building collapse, road accident, gas leak, electrical, and flood, but the detection layer currently only handles fire and smoke. Adding a road-accident detector, for example, would require a new model trained on a road-accident dataset, but the downstream relay, suppression (where applicable), and dispatch layers would not require modification. The framework's modular design is intended to make this extension straightforward.
+
+The fourth direction is the \textbf{integration of the dispatch layer with the Bangladesh Fire Service's existing radio and vehicle-tracking systems}. The prototype currently uses a simulated vehicle-tracking feed; a production deployment would need to consume the Fire Service's actual GPS feeds, which are maintained separately. The integration is documented but not implemented.
+
+The fifth direction is a \textbf{field deployment with a partner fire station}. The framework is ready for pilot deployment in a single-building or single-campus scenario, and a pilot would surface the operational issues that no simulation can capture: the training burden on dispatchers, the false-alarm rate in real lighting conditions, the battery life of portable routers, the noise safety of the acoustic suppressor in occupied spaces, and the social acceptability of camera-based fire detection in the chosen site. We hope to conduct such a pilot with a station in the Dhaka metropolitan area in the coming year.
+
+\subsection{Closing Remarks}
+
+The framework in this thesis is a small step toward a fire-response system that detects fire in its first minute, attempts on-site acoustic suppression while the alert is in flight, relays the alert when the public network is down, and dispatches the nearest available crew. Each of the four layers is built on prior work that solved its piece of the problem well; the contribution of this thesis is the integration and the shared incident schema that binds the four together. The result is a deployable prototype that the Bangladesh Fire Service and Civil Defence can evaluate and extend, and a methodological argument that the edge-first, dual-channel pattern established in Amanot-Net transfers cleanly to the fire-response domain, with the addition of an on-site suppression layer that the prior pattern did not include. The argument is supported by the evaluation results in Chapter 4 and by the operational feedback that motivated the work in the first place. Figure~\ref{fig:positioning} positions the framework against representative prior systems on the two axes that matter most for the deployment scenario: resource footprint (in log megabytes) and internet dependency (from fully offline to cloud-only). The framework occupies the lower-left quadrant alone, the disaster-tech quadrant, in which a small-footprint, network-independent system with on-site suppression can survive the failures that bring down the cloud-dependent alternatives.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/fig10_positioning.png}
+\caption{Multi-angle positioning of the framework against representative prior systems. X axis: resource footprint (log MB). Y axis: internet dependency (0 = fully offline, 10 = cloud-only). The framework occupies the lower-left (Disaster Tech) quadrant alone, combining a 12-megabyte resource footprint, full offline capability, and on-site acoustic suppression. No other reviewed system fills this niche; the closest, Briar, is smartphone-only, requires a Tor connection for internet-mode operation, and does not include a suppression layer.}
+\label{fig:positioning}
+\end{figure}
+
+We hope that the framework, or some descendant of it, will contribute to the Fire Service's modernisation program over the coming years, and that the open-source release of the FireGuard and FireServiceBD prototypes will lower the barrier for other groups working on the same problem in similar contexts.
