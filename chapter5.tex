@@ -1,0 +1,282 @@
+\begin{center}
+    \section*{\fontsize{20}{20}\selectfont Chapter 5}
+\end{center}
+\vspace{10mm}
+
+\section{Standards, Constraints and Milestones}
+
+The transition of the framework from a research prototype to a deployable system is governed not only by its technical performance but also by a set of professional standards, sustainability principles, ethical obligations, and practical constraints that shape responsible engineering practice. Designing an autonomous fire-detection, suppression, alert-relay, and dispatch system for public use carries direct implications for public safety, individual privacy, and community trust, and therefore demands a disciplined and principled approach throughout the development lifecycle. This chapter examines the standards adopted to guide the sustainable development of the framework, discusses the broader impacts the system may have on society, addresses the ethical considerations inherent in deploying AI-driven surveillance and automated suppression technology, and outlines the technical, environmental, and operational challenges encountered during development. It further identifies the design, component, and budget constraints that shaped key engineering decisions, and concludes with the project timeline and an accompanying Gantt chart.
+
+\subsection{Sustainability Standards}
+
+The framework was developed with sustainability treated as a first-class design requirement rather than an afterthought, in alignment with globally recognised standards for responsible engineering and smart-city development. The framework's sustainability is assessed across three complementary dimensions: economic, environmental, and social.
+
+\subsubsection{Economic Sustainability}
+By performing inference directly on camera-equipped edge devices rather than streaming continuous video to a centralised cloud infrastructure, the framework eliminates the need for expensive, high-performance servers and high-bandwidth internet connections at every deployment site. This design substantially lowers both the capital and recurring operational costs of the system, making it economically viable for large-scale rollout in budget-constrained environments such as public institutions, transport hubs, and small businesses across Bangladesh. The use of \textbf{commodity OpenWrt routers} for the relay layer and \textbf{commodity public-address loudspeakers} for the suppression layer, rather than industrial-grade LoRaWAN gateways or gas-based suppression cylinders, further reduces the bill of materials.
+
+\subsubsection{Environmental Sustainability}
+Processing data at the edge and transmitting only compact alert packets rather than continuous high-resolution video significantly reduces the energy demand typically associated with cloud-centric surveillance architectures. The relay layer's mesh protocol is Wi-Fi-based and uses hardware that the building already owns, so no additional radio infrastructure is required. The suppression layer is \textbf{water-free and chemical-free}: it produces no runoff, no residue, and no ozone-depleting byproducts, which is a significant advantage over halon, FM-200, and dry-chemical alternatives in occupied indoor spaces. The detection layer's heuristic fallback, which runs in under 5 milliseconds on a Raspberry Pi 4, allows the system to remain useful on solar-charged portable hardware where a heavier model would drain the battery in hours rather than days. Figure~\ref{fig:battery} shows the estimated battery life of a 5000\,mAh portable router under the framework's adaptive beacon interval, which extends the operating time from roughly 6 hours in the always-on mode to roughly 36 hours in low-power mode.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/fig8_battery.png}
+\caption{Battery life of a 5000\,mAh portable router under the framework's adaptive beacon interval. Left: estimated battery life versus beacon interval, with the 24-hour overnight target marked. Right: beacon-interval multiplier as a function of remaining battery capacity; below 5 percent capacity, the daemon enters low-power mode (beacon every 30 seconds, no anti-entropy, no ACK tracking), extending the operating time by roughly 6$\times$ over the always-on baseline.}
+\label{fig:battery}
+\end{figure}
+
+\subsubsection{Social Sustainability}
+The framework directly supports the \textbf{United Nations' Sustainable Development Goal 11} (Sustainable Cities and Communities) by strengthening the fire-response infrastructure of public spaces. Reliable, proactive fire detection, suppression, and alerting has the potential to reduce the frequency and severity of fire incidents in crowded, unstructured environments such as markets, transport hubs, and educational institutions. The dispatch layer's citizen-facing SOS channel, in particular, gives a member of the public a single-tap path to a structured incident record, which is a meaningful improvement over the current practice of dialling 999 and describing the situation verbally.
+
+\subsection{Impacts on Society}
+
+As a system intended for deployment in public and semi-public spaces, the framework carries implications that extend well beyond its immediate technical function. Its societal impact can be understood along several dimensions.
+
+\begin{itemize}
+\item \textbf{Enhanced public safety.} By shifting the fire-response paradigm from reactive, post-incident review to proactive, real-time detection, on-site suppression, and dispatch, the framework has the potential to reduce the frequency and severity of fire incidents in crowded, unstructured environments such as markets, transport hubs, and educational institutions.
+
+\item \textbf{Reduced response time.} Automated, resilient alert delivery removes dependence on continuous human monitoring, shortening the Mean Time To Response and enabling fire crews to intervene before an incident escalates, rather than merely investigating it afterward. The framework's automatic station-assignment algorithm removes the call-taking and station-selection delays that the Bangladesh Fire Service and Civil Defence's own statistics identify as the dominant contributors to the current 14-minute median response time in Dhaka.
+
+\item \textbf{Smaller fire load on arrival.} The acoustic suppression layer acts on the fire in the seconds between detection and crew arrival, which means that the crew arrives at a smaller fire than they would have without the suppressor. In the best case (a small flame that the suppressor extinguishes outright), the crew arrives at a scene that is already contained; in the worst case (a large flame that the suppressor cannot handle), the suppressor does not fire and the crew arrives at the same fire they would have faced without the framework. The asymmetry of this outcome is the social value of the suppression layer.
+
+\item \textbf{Increased public trust and space utilisation.} Communities that feel safer in shared public spaces are more likely to use them, supporting local commerce, social interaction, and civic life. This is directly aligned with the goals of sustainable urban development set out in the Fire Service's strategic plan \cite{fscd2021strategic}.
+
+\item \textbf{Economic and institutional benefits.} The system's low-cost, edge-based architecture makes advanced fire-response technology accessible to institutions and communities that would otherwise be priced out of conventional, cloud-dependent surveillance solutions, helping to narrow the security technology gap between developed and developing regions.
+
+\item \textbf{Risks to privacy and civil liberties.} At the same time, any expansion of AI-driven surveillance introduces legitimate societal concerns around privacy, continuous monitoring, and the potential for misuse, which must be proactively managed rather than treated as secondary concerns. The acoustic suppressor introduces a separate concern: a low-frequency 100 dB sound field is uncomfortable for occupants and can cause hearing damage on sustained exposure. The framework addresses this by firing the suppressor only on a confirmed detection, with a 10-second maximum duration, and with a safety interlock that requires operator acknowledgement in occupied spaces.
+\end{itemize}
+
+Taken together, these impacts show that the framework is not a purely technical artifact but a socio-technical system whose responsible deployment requires ongoing engagement with the communities and personnel it is designed to protect.
+
+\subsection{Ethics}
+
+The deployment of any AI-based surveillance and automated-suppression technology in public spaces raises significant ethical questions that must be addressed as an integral part of the system's design, not as a post-hoc consideration. The framework's ethical design centres on the following principles.
+
+\begin{itemize}
+\item \textbf{Privacy by design.} The framework analyses video frames locally on the edge device and discards them immediately after inference. No raw video or personally identifiable footage is transmitted to or permanently stored on a central server unless a threat is detected and confirmed, minimising the risk of unauthorised access to or misuse of personal data.
+
+\item \textbf{Algorithmic fairness and bias mitigation.} Because AI models can inherit or amplify biases present in their training data, the BD-Threats-v1 fire subset was deliberately constructed using images from diverse locations, times of day, and lighting conditions across Dhaka, Chittagong, and Sylhet. Periodic audits of the dataset and model outputs are planned to identify and correct any emerging bias in fire and smoke classification.
+
+\item \textbf{Transparency and accountability.} The system's detection thresholds, alert policies, suppression triggers, and escalation logic are configurable and auditable through the dispatch portal, so that fire-service personnel and administrators can understand, review, and, where necessary, contest the system's decisions rather than treating it as an opaque black box.
+
+\item \textbf{Proportionality and human oversight.} The framework is explicitly designed to alert and escalate to human responders rather than to take autonomous punitive action. The acoustic suppressor is the only actuator in the system, and it acts on the fire rather than on any person. The two-consecutive-frame persistence rule and the configurable confidence threshold are the principal mechanisms by which the system limits its own autonomy. A 10-second maximum duration and an operator-acknowledgement interlock in occupied spaces limit the suppressor's exposure to occupants.
+\end{itemize}
+
+These principles reflect an ongoing commitment to balancing the legitimate safety benefits of proactive AI surveillance and automated suppression against the fundamental rights and expectations of the individuals who occupy the spaces it monitors.
+
+\subsection{Challenges}
+
+The development and validation of the framework surfaced a number of technical, operational, and environmental challenges that influenced both the current implementation and its planned future development.
+
+\begin{itemize}
+\item \textbf{Balancing accuracy and latency.} High-accuracy deep learning models are typically computationally expensive, while real-time, edge-based threat detection demands lightweight, low-latency inference. Identifying the right trade-off, ultimately resolved through the selection of YOLOv8n at 320$\times$320 input resolution, required extensive experimentation and ablation testing.
+
+\item \textbf{Network unreliability.} Designing a communication architecture that remains dependable in regions with intermittent or unstable internet connectivity, without introducing excessive cost or complexity, was a substantial engineering challenge that motivated the dual-channel SIP-and-mesh design.
+
+\item \textbf{Suppressor-flame matching.} The acoustic suppressor is effective on small flames and ineffective on large ones, which required a decision rule that distinguishes the two cases at detection time. The 15-percent-area threshold was derived empirically from the suppression evaluation in Chapter 4, but it is a heuristic, and a more sophisticated rule based on flame height or fuel type could improve the match in future work.
+
+\item \textbf{Adversarial robustness.} The current system has not been stress-tested against adversarial attacks, inputs deliberately crafted to evade detection, such as camouflage patterns or occlusion techniques. This represents an open challenge for future hardening of the model.
+
+\item \textbf{Environmental variability.} Real-world conditions common in Bangladesh, such as heavy monsoon rainfall, dense fog, and low-light nighttime environments, can degrade visual clarity and reduce detection reliability, despite the use of data augmentation during training.
+
+\item \textbf{Occupant safety during suppression.} The 30 to 60 Hz band is below the human pain threshold at the intensities the suppressor uses, but sustained exposure above 100 dB can cause hearing damage. The 10-second maximum duration and the operator-acknowledgement interlock mitigate this, but a production deployment should add a noise-level monitor that aborts suppression if the sound pressure level at the occupant position exceeds a safe threshold.
+
+\item \textbf{Absence of established standards.} Because proactive, AI-driven, edge-based fire response with on-site acoustic suppression is a relatively emerging field, no fully standardised engineering codes or benchmarks exist for this specific application, requiring the team to adopt a principles-based approach and establish its own performance benchmarks.
+
+\item \textbf{Stakeholder alignment.} Balancing the needs of fire-service personnel (reliable, low-latency alerts), the public (safety alongside privacy and protection from noise), and institutional administrators (cost and manageability) required careful negotiation of potentially conflicting requirements throughout the design process.
+\end{itemize}
+
+\subsection{Constraints}
+
+Several categories of constraints shaped the engineering decisions made throughout the design, development, and deployment of the framework. These are organised below into design, component, and budget constraints.
+
+\subsubsection{Design Constraints}
+
+\begin{itemize}
+\item \textbf{Real-time performance.} The system was required to maintain an end-to-end detection-to-alert latency suitable for time-critical intervention, constraining model selection to lightweight architectures capable of running efficiently on resource-limited edge hardware.
+
+\item \textbf{Edge-first architecture.} To avoid dependence on continuous high-bandwidth connectivity, all AI inference had to be performed on-device rather than offloaded to a remote server, limiting the complexity of models that could be deployed.
+
+\item \textbf{Resilience requirement.} The communication layer was constrained to operate correctly even under total primary network failure, necessitating the dual-channel (SIP and mesh) design rather than a simpler, single-channel alternative.
+
+\item \textbf{Suppression safety requirement.} The suppression layer was constrained to fire only on a confirmed detection, with a 10-second maximum duration and an operator-acknowledgement interlock in occupied spaces, to protect occupants from sustained noise exposure.
+
+\item \textbf{Modularity and scalability.} The four-layer architecture (detection, suppression, relay, dispatch) was constrained to remain modular, so that individual components could be upgraded, replaced, or scaled independently without redesigning the entire system.
+\end{itemize}
+
+\subsubsection{Component Constraints}
+
+\begin{itemize}
+\item \textbf{Edge hardware limitations.} Deployment on low-cost, resource-constrained devices such as the Raspberry Pi 4 restricted the model to lightweight variants (YOLOv8n over YOLOv8s), as confirmed by the latency observed in ablation testing.
+
+\item \textbf{Suppressor hardware limitations.} The 50-watt public-address loudspeaker and 100-watt class-D amplifier are commodity components, but they cap the sound pressure level at the flame at roughly 110 dB at 1 metre, which limits the suppressor's effective range to roughly 30 cm. Larger flames and greater distances would require professional audio hardware.
+
+\item \textbf{Mesh-relay bandwidth.} The OpenWrt mesh relay supports small, condensed alert packets rather than rich media, constraining the backup channel to transmit essential metadata (threat type, GPS, confidence, suppressor status) rather than images or video.
+
+\item \textbf{SIP telephony dependence.} The primary alert channel relies on the availability of a functioning SIP/VoIP infrastructure and valid contact numbers for the on-call responders, introducing a dependency on correctly maintained configuration data.
+
+\item \textbf{Camera and sensor quality.} Detection accuracy is inherently constrained by the quality and placement of the camera hardware, particularly under the low-light and adverse weather conditions discussed earlier in this chapter.
+\end{itemize}
+
+\subsubsection{Budget Constraints}
+
+\begin{itemize}
+\item \textbf{Prototype-scale deployment.} As a capstone research project, the framework was validated at a limited, prototype scale rather than a full city-wide deployment, constraining the scope of testing and the size of the evaluation dataset.
+
+\item \textbf{Low-cost hardware requirement.} To ensure the framework remains economically viable for developing regions, component selection was constrained to affordable, commercially available hardware (Raspberry Pi 4-class edge devices, GL.iNet AR-150-class routers, and commodity public-address loudspeakers) rather than industrial-grade or specialised equipment.
+
+\item \textbf{Dataset development cost.} Constructing the BD-Threats-v1 fire subset within the project's time and resource budget required a hybrid strategy combining re-annotated public-source images with original photography rather than commissioning a larger, purpose-built data collection campaign.
+
+\item \textbf{Personnel and time budget.} With a four-member development team operating within a fixed academic semester timeline, the scope of testing was necessarily constrained to what could be reliably completed within the available time.
+\end{itemize}
+
+\subsection{Timeline and Gantt Chart}
+
+The framework was developed over a ten-month period, structured into six major phases spanning literature review, dataset development, model training, suppression module implementation, communication module implementation, system integration, and final testing and reporting. Table~\ref{tab:project_milestones} summarises the key milestones and corresponding deliverables for each phase, while Table~\ref{tab:gantt} presents the associated Gantt chart illustrating the project schedule.
+
+\begin{table}[H]
+\centering
+\caption{Project milestones and deliverables.}
+\label{tab:project_milestones}
+\renewcommand{\arraystretch}{1.3}
+
+\begin{tabularx}{\textwidth}{|p{2.8cm}|p{6.3cm}|X|}
+\hline
+\textbf{Timeline} &
+\textbf{Milestone} &
+\textbf{Deliverable / Success Criteria} \\
+\hline
+
+Month 1--2 &
+Literature review and problem definition &
+Finalised problem statement and objectives \\
+\hline
+
+Month 3--4 &
+Dataset collection and annotation &
+BD-Threats-v1 fire subset (73{,}600 images, 2 classes) finalised \\
+\hline
+
+Month 5--6 &
+Model training and suppressor rig construction &
+YOLOv8n model achieving mAP@0.5 $\geq$ 0.90; acoustic suppressor achieving $<$10 s extinction on 15-cm pan \\
+\hline
+
+Month 7--8 &
+Communication module development &
+Functional SIP and mesh-relay alert pipeline \\
+\hline
+
+Month 9 &
+System integration and dispatch portal deployment &
+Working prototype of FireGuard and FireServiceBD deployed for pilot testing \\
+\hline
+
+Month 10 &
+Testing, evaluation, and report writing &
+Validated results and completed thesis report \\
+\hline
+
+\end{tabularx}
+\end{table}
+
+
+\begin{table}[H]
+\centering
+\caption{Gantt chart of the project timeline.}
+\label{tab:gantt}
+
+\renewcommand{\arraystretch}{1.6}
+\setlength{\tabcolsep}{4pt}
+
+\begin{tabular}{|p{5.0cm}|*{10}{>{\centering\arraybackslash}p{0.55cm}|}}
+\hline
+\rowcolor{headerblue}
+\color{white}\textbf{Task} &
+\color{white}\textbf{M1} &
+\color{white}\textbf{M2} &
+\color{white}\textbf{M3} &
+\color{white}\textbf{M4} &
+\color{white}\textbf{M5} &
+\color{white}\textbf{M6} &
+\color{white}\textbf{M7} &
+\color{white}\textbf{M8} &
+\color{white}\textbf{M9} &
+\color{white}\textbf{M10} \\
+\hline
+
+Literature review \& problem definition
+& \cellcolor{taskblue}
+& \cellcolor{taskblue}
+& & & & & & & & \\
+\hline
+
+Dataset collection \& annotation (BD-Threats-v1 fire subset)
+&
+& \cellcolor{taskblue}
+& \cellcolor{taskblue}
+& \cellcolor{taskblue}
+& & & & & & \\
+\hline
+
+Model training \& suppressor rig construction
+&
+&
+&
+& \cellcolor{taskblue}
+& \cellcolor{taskblue}
+& \cellcolor{taskblue}
+&
+&
+&
+\\
+\hline
+
+Communication module development (SIP \& mesh relay)
+&
+&
+&
+&
+&
+& \cellcolor{taskblue}
+& \cellcolor{taskblue}
+& \cellcolor{taskblue}
+&
+\\
+\hline
+
+System integration \& portal deployment
+&
+&
+&
+&
+&
+&
+&
+& \cellcolor{taskblue}
+& \cellcolor{taskblue}
+&
+\\
+\hline
+
+Testing, evaluation \& report writing
+&
+&
+&
+&
+&
+&
+&
+&
+& \cellcolor{taskblue}
+& \cellcolor{taskblue}
+\\
+\hline
+
+\end{tabular}
+\end{table}
+
+As shown in Table~\ref{tab:gantt}, the project followed a largely sequential structure with limited overlap between adjacent phases, reflecting the dependency of later stages (for example, communication module development) on the outputs of earlier ones (for example, a trained and validated detection model). Dataset collection, model training, and suppressor rig construction together occupied the largest share of the timeline, consistent with their central importance to the overall accuracy, suppression effectiveness, and reliability of the framework. The final two months were reserved for system integration, end-to-end testing, and report writing, with enough slack for the empirical validation presented in Chapter 4.
+
+\subsection{Summary}
+
+This chapter has examined the non-technical dimensions that governed the responsible development of the framework, including its alignment with economic, environmental, and social sustainability standards; its broader impacts on public safety, trust, and privacy; the ethical principles guiding its design; and the technical, environmental, and stakeholder-related challenges encountered during development. It has further detailed the design, component, and budget constraints that shaped key engineering trade-offs, and has presented the project's ten-month timeline and Gantt chart. Together, these considerations demonstrate that the framework was developed not only as a technically sound system but as a responsibly engineered one, mindful of the practical limitations and societal obligations inherent in deploying proactive AI fire response with on-site acoustic suppression in real-world public spaces.
