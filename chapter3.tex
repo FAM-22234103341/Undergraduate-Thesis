@@ -1,0 +1,349 @@
+\begin{center}
+    \section*{\fontsize{20}{20}\selectfont Chapter 3}
+\end{center}
+\vspace{10mm}
+\section{Proposed Model}
+
+\subsection{Introduction}
+
+This chapter describes the integrated framework in detail. The framework has four layers, shown in Figure~\ref{fig:arch}: a \textbf{detection layer} that runs a YOLOv8n-based fire and smoke detector on the edge, a \textbf{suppression layer} that drives an acoustic-wave extinguisher in the 30 to 60 Hz band, a \textbf{relay layer} that combines a SIP-over-UDP voice call with a peer-to-peer mesh flood, and a \textbf{dispatch layer} that mirrors the operational practice of the Bangladesh Fire Service and Civil Defence. The four layers share a single incident schema, summarised in Table~\ref{tab:incident}, and exchange events through a REST API and a server-sent event stream.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/fig1_architecture.png}
+\caption{The integrated framework architecture. The detection layer (FireGuard, Next.js + onnxruntime-web) runs the YOLOv8n model in the browser with an HSV heuristic fallback. The suppression layer drives an acoustic-wave extinguisher in the 30 to 60 Hz band through a Web Audio oscillator and a class-D amplifier. The relay layer pairs a SIP-over-UDP voice call to the on-call responder with a peer-to-peer mesh flood across OpenWrt routers running the Mesh-Chat fork with Ed25519 signing. The dispatch layer (FireServiceBD, Next.js + Prisma + PostgreSQL) hosts the station directory, the incident queue, and the multi-agency escalation logic. A shared JSON incident schema binds the four layers.}
+\label{fig:arch}
+\end{figure}
+
+The detection layer is implemented as a Next.js web application called \textbf{FireGuard}, deployed at \texttt{https://fireguardbd.vercel.app/}. It runs entirely in the browser, uses onnxruntime-web for inference, and falls back to a color-space and connected-component heuristic when no model file is present. The suppression layer is a Web Audio oscillator and a public-address loudspeaker driven by the same FireGuard dashboard, with a 50-watt class-D amplifier and a 100-watt full-range driver. The relay layer is implemented as a TypeScript SIP caller that ships with FireGuard, and as a fork of the Mesh-Chat OpenWrt package extended with Ed25519 message signing and gossip-based flooding. The dispatch layer is implemented as a separate Next.js web application called \textbf{FireServiceBD}, deployed at \texttt{https://fireservicebd.vercel.app/}, with a Prisma-managed PostgreSQL schema and a server-sent event stream for live incident updates.
+
+\subsection{Feasibility Analysis}
+
+\textbf{Technical feasibility.} All four layers are built on commodity hardware and open-source software. The detection layer runs in any modern browser that supports WebAssembly, which includes every smartphone browser shipped since 2020. The suppression layer uses a public-address loudspeaker and a class-D amplifier, both of which are commodity audio components available in any electronics market in Dhaka. The relay layer runs on a stock GL.iNet AR-150 or comparable OpenWrt router with 16 megabytes of flash and 64 megabytes of RAM, which is the hardware already deployed in most small businesses in Dhaka. The dispatch layer runs on any Node.js host, including the free tier of Vercel, on which the prototype is deployed. No component requires a specialised GPU, an industrial sensor, or a paid telephony contract beyond a SIP account.
+
+\textbf{Economic feasibility.} The bill of materials for a single-building deployment is dominated by the camera, the loudspeaker, and the router. A Raspberry Pi 4 with a camera module costs approximately 8{,}000 Bangladeshi taka, a 50-watt public-address loudspeaker with a class-D amplifier costs approximately 5{,}000 taka, and a GL.iNet AR-150 costs approximately 4{,}000 taka. The dispatch portal is hosted on the free tier of Vercel. The total cost per building is therefore around 17{,}000 taka, which is within the budget of the small commercial establishments that dominate the fire-incident statistics in Dhaka. This compares with 80{,}000 to 200{,}000 taka for an industrial-grade addressable fire-alarm system, which detects but does not suppress or dispatch.
+
+\textbf{Operational feasibility.} The framework is designed for two operator roles: the building owner, who installs the camera, the loudspeaker, and the router, and the Fire Service telecommunicator, who watches the dispatch portal. The building owner is not required to configure anything beyond entering a Wi-Fi password. The telecommunicator is not required to write any code. The framework assumes that the Fire Service maintains the station directory and the district boundaries, which is already part of its mandate.
+
+\textbf{Schedule feasibility.} The framework was built over a ten-month period by a four-person team. The schedule is documented in Chapter 5. The prototype is deployable in pilot form today; full city-wide deployment would require an integration effort with the Fire Service's existing radio and vehicle-tracking systems, which is out of scope for this thesis.
+
+\subsection{Requirement Analysis}
+
+The framework's requirements are divided into functional and non-functional. The functional requirements are listed first.
+
+\begin{itemize}
+\item The detection layer shall run a YOLOv8n-based fire and smoke detector in the browser at no less than 15 frames per second on a Raspberry Pi 4.
+\item The detection layer shall fall back to a color-space and connected-component heuristic when no ONNX model file is present, and shall produce a usable bounding box with a confidence score.
+\item The suppression layer shall, on a confirmed detection with a bounding-box area below 15 percent of the frame, emit a sine wave in the 30 to 60 Hz band through a connected loudspeaker, with a maximum duration of 10 seconds.
+\item The detection layer shall place a SIP-over-UDP voice call to the on-call responder when a detection exceeds the confidence threshold for at least two consecutive frames.
+\item The relay layer shall flood a compact JSON incident alert across a peer-to-peer mesh of OpenWrt routers when the SIP call cannot be completed or in parallel with the SIP call.
+\item The dispatch layer shall accept incident alerts from the detection and relay layers through a REST endpoint, assign each incident to the nearest available fire station by district and geo-distance, and log the assignment as an event on the incident record.
+\item The dispatch layer shall support escalation to neighbouring stations and to partner agencies (police, ambulance, utility) when the assigned station does not acknowledge within a configurable timeout.
+\item The dispatch layer shall expose a citizen-facing SOS channel that accepts a report with a threat type, a location, and an optional photo, and that creates an incident record in the same schema as the machine-generated alerts.
+\item The dispatch layer shall expose a web portal for officers with live incident tracking, vehicle and crew status, and a structured event log per incident.
+\end{itemize}
+
+The non-functional requirements are listed below.
+
+\begin{itemize}
+\item The end-to-end detection-to-dispatch latency shall be less than 5 seconds when the uplink is alive and less than 10 seconds when the alert must traverse the mesh relay.
+\item The acoustic suppressor shall extinguish a 15-cm alcohol pan fire in under 10 seconds at 45 Hz and 100 percent intensity, with no reignition for at least 30 seconds after the sound field is removed.
+\item The mesh relay shall achieve a delivery ratio above 0.95 at 20 percent node churn on a 30-node mesh.
+\item The detection layer shall produce a false-positive rate below 5 percent on the test split of the BD-Threats-v1 fire subset, computed at the frame level.
+\item The dispatch portal shall handle 200 concurrent open incident records without degradation of median triage time.
+\item The framework shall not transmit raw video frames off the device on which they were captured. Only the bounding-box metadata, the confidence, the suppression status, and the GPS coordinates may leave the device.
+\end{itemize}
+
+\subsection{The Research Methodology}
+
+The research methodology is a combination of design science and empirical evaluation. The framework is designed against the requirements listed above, implemented as two web applications, an acoustic-suppression rig, and an OpenWrt package, and evaluated against the non-functional requirements on a 73{,}600-image fire and smoke dataset, on a small-flame suppression rig, on a 30-node mesh testbed, and on a dispatch portal under simulated concurrent load.
+
+The design-science cycle follows the four-step pattern of March and Smith \cite{marchsmith1995}: build, evaluate, theorise, justify. The build step produced the FireGuard and FireServiceBD prototypes, the acoustic-suppression rig, and the Mesh-Chat fork. The evaluate step produced the empirical results reported in Chapter 4. The theorise step produced the integrated-framework concept set out in this chapter. The justify step produced the comparison with prior work reported in Chapter 4.
+
+The empirical evaluation uses four instruments: a held-out test split of the BD-Threats-v1 fire subset for detection accuracy, a small-flame suppression rig for the acoustic-suppression effectiveness experiments, a discrete-event simulator for the mesh-relay bandwidth and delivery-ratio experiments, and a load generator for the dispatch-portal triage-time experiments. The instruments are described in detail in Chapter 4.
+
+\subsection{Data Set}
+
+The detection layer was trained on a 73{,}600-image fire and smoke subset of the BD-Threats-v1 corpus, which was assembled for the Amanot-Net project and extended for this thesis. The subset was drawn from three sources: the D-Fire public dataset \cite{dunnhofer2023dfire}, the Foggia fire-detection benchmark, and original photography in Dhaka, Chittagong, and Sylhet between November 2025 and March 2026. The original photography was annotated by the four members of the team using the LabelImg tool, with a calibration round in which all four members annotated the same 500 images to compute inter-annotator agreement. The agreement, measured as mean Intersection over Union, was 0.84, which is acceptable for the task.
+
+\begin{table}[H]
+\caption{Dataset composition.}
+\begin{center}
+\begin{tabularx}{0.85\textwidth}{
+  | >{\centering\arraybackslash}X
+  | >{\centering\arraybackslash}X
+  | >{\centering\arraybackslash}X
+  | >{\centering\arraybackslash}X
+  | }
+\hline
+\textbf{Source} & \textbf{Images} & \textbf{Fire boxes} & \textbf{Smoke boxes} \\
+\hline
+D-Fire & 41{,}200 & 38{,}900 & 28{,}100 \\
+\hline
+Foggia benchmark & 14{,}800 & 12{,}400 & 9{,}700 \\
+\hline
+Original (Dhaka) & 11{,}600 & 9{,}800 & 7{,}200 \\
+\hline
+Original (Chittagong, Sylhet) & 6{,}000 & 4{,}900 & 3{,}800 \\
+\hline
+\textbf{Total} & \textbf{73{,}600} & \textbf{66{,}000} & \textbf{48{,}800} \\
+\hline
+\end{tabularx}
+\label{tab:dataset}
+\end{center}
+\end{table}
+
+The subset was split 70 percent training, 20 percent validation, and 10 percent testing, stratified by source so that the test split contained a proportional mix of D-Fire, Foggia, and original images. Class balance was maintained within each split. The split was fixed before training and was not altered.
+
+\subsubsection{Data Collection and Preprocessing}
+
+The original photography was collected with three camera models: a Raspberry Pi Camera Module v2, a Logitech C920 webcam, and the rear camera of a Samsung Galaxy A52 mid-range phone. The choice was deliberate, to span the camera hardware likely to be present in a real deployment. The images were captured at 1920$\times$1080 resolution and resized to 320$\times$320 for training, with the same resize logic used at inference time to avoid train-serve skew.
+
+Preprocessing consisted of three steps. First, the images were normalised to the 0 to 1 range by dividing each pixel by 255. Second, the channels were reordered from RGB to BGR to match the YOLOv8 training convention. Third, the bounding boxes were converted from absolute pixel coordinates to the YOLO format (centre $x$, centre $y$, width, height, all normalised to 0 to 1). No colour jitter, random crop, or mosaic augmentation was applied at training time, because the YOLOv8 default augmentations were already aggressive and adding more degraded the validation mAP.
+
+\subsubsection{Feature Selection}
+
+The YOLOv8n architecture selects its own features through its convolutional backbone. No hand-crafted features were used. The heuristic fallback, by contrast, uses a small set of hand-crafted features derived from the HSV colour space: the hue range (0 to 60 degrees for fire, 0 to 30 for smoke), the saturation (above 0.45 for fire, below 0.18 for smoke), the value (above 0.45 for fire, between 0.4 and 0.85 for smoke), and the connected-component area ratio (above 0.005 of the frame). These features were chosen for their simplicity and for the fact that they produce a usable bounding box in less than 5 milliseconds on a Raspberry Pi 4, which is the budget for the fallback path.
+
+\subsection{Algorithm}
+
+The detection layer runs the algorithm in Listing~\ref{lst:detect} on each frame captured from the camera. The algorithm tries the ONNX model first, falls back to the heuristic if the model is unavailable or throws an exception, fires the suppression layer when a detection is confirmed and the flame size is within the suppressor's effective regime, and then fires the alert pipeline.
+
+\begin{lstlisting}[language=Python, caption={Detection-suppression-alert pseudocode.}, label={lst:detect}]
+def detect(frame, prev_detections):
+    session = try_load_onnx("/models/fire_detector.onnx")
+    if session is not None:
+        result = run_onnx(session, frame)
+        if result is not None:
+            return result
+    return run_heuristic(frame)  # HSV + connected components
+
+def should_alert_and_suppress(detections, prev_detections, threshold=0.8):
+    high_conf = [d for d in detections if d.confidence >= threshold]
+    prev_high = [d for d in prev_detections if d.confidence >= threshold]
+    if not high_conf:
+        return False, False, []
+    overlapping = [d for d in high_conf
+                   if any(iou(d.bbox, p.bbox) > 0.3 for p in prev_high)]
+    confirmed = len(overlapping) > 0
+    # Suppress only if the largest confirmed box is small enough
+    # for the acoustic suppressor to handle (< 15% of frame area).
+    if confirmed:
+        largest = max(overlapping, key=lambda d: d.bbox.width * d.bbox.height)
+        area_ratio = largest.bbox.width * largest.bbox.height
+        suppress = area_ratio < 0.15
+    else:
+        suppress = False
+    return confirmed, suppress, overlapping
+
+def on_frame(frame):
+    result = detect(frame, state.prev)
+    fire, suppress, boxes = should_alert_and_suppress(result.detections, state.prev)
+    state.prev = result.detections
+    if fire:
+        if suppress:
+            activate_acoustic_suppressor(frequency=45, intensity=1.0,
+                                         duration_s=10, wave_type="sine")
+        place_sip_call(boxes, gps=get_gps())
+        flood_mesh_alert(boxes, gps=get_gps(), suppressor_fired=suppress)
+\end{lstlisting}
+
+Figure~\ref{fig:detection_pipeline} shows the same pipeline as a block diagram. The two-consecutive-frame persistence check at the end of the pipeline is the single most effective false-positive suppressor in the system: it filters out transient reflections, sun-lit surfaces, and brief motion artefacts that the model or the heuristic might flag in a single frame. The branching to the suppression layer occurs only when the bounding-box area is below 15 percent of the frame, which is the regime in which the acoustic suppressor is effective.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/fig2_detection_pipeline.png}
+\caption{The detection-suppression pipeline. Camera frames at 1920$\times$1080 are resized and normalised, then passed either through the YOLOv8n ONNX model (via onnxruntime-web / WASM) or, when no model file is present, through the HSV colour filter and connected-component labelling fallback. Both paths produce bounding boxes with confidence scores. A two-consecutive-frame persistence check filters transient false positives. If the largest confirmed box is below 15 percent of the frame area, the acoustic suppressor is activated in parallel with the SIP call and the mesh flood.}
+\label{fig:detection_pipeline}
+\end{figure}
+
+The relay layer's mesh-flood algorithm is a direct extension of the Mesh-Chat gossip protocol. Each router that receives a new incident alert forwards it to a random subset of $f$ peers (default $f=3$), adds the alert's UUID to a 1024-bit Bloom filter, and runs an anti-entropy digest exchange with a random peer every 30 seconds to recover from any dropped messages. The full algorithm is documented in the Mesh-Chat paper \cite{meshchat2026} and is not reproduced here.
+
+The dispatch layer's station-assignment algorithm is shown in Listing~\ref{lst:assign}. It takes an incident with a district and a geo-point, queries the station directory for stations in the same district, and assigns the incident to the nearest station with an available vehicle. If no station in the same district has an available vehicle, the algorithm widens the search to neighbouring districts. If no station in the wider region acknowledges within 60 seconds, the algorithm escalates to the regional command centre.
+
+\begin{lstlisting}[language=Python, caption={Station-assignment pseudocode.}, label={lst:assign}]
+def assign_station(incident):
+    district = incident.district
+    same_district = stations_in(district, status="available")
+    if same_district:
+        return nearest_by_geo(same_district, incident.lat, incident.lng)
+    neighbouring = stations_in(neighbours_of(district), status="available")
+    if neighbouring:
+        return nearest_by_geo(neighbouring, incident.lat, incident.lng)
+    schedule_escalation(incident, after_seconds=60, to="regional_command")
+    return None
+\end{lstlisting}
+
+\subsection{Design and Implementation}
+
+\subsubsection{Detection Layer}
+
+The detection layer is a Next.js 16 application built with TypeScript, React 19, and Tailwind CSS 4. The user interface is a single dashboard page with a vision-input panel, a confidence-threshold slider, an environmental-sensor gauge, an acoustic-wave-suppressor control panel, a threat map, an activity log, and an alert banner. The dashboard is shown in Figure~\ref{fig:fireguard}. The user interface uses shadcn/ui components for the dialogs, sliders, and toggles.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{screenshots/fireguardbd_full.png}
+\caption{The FireGuard detection dashboard, deployed at \texttt{https://fireguardbd.vercel.app/}. The dashboard combines a live camera feed with ONNX-based fire detection, an environmental-sensor gauge, an \textbf{Acoustic Wave Suppressor} control panel (lower-left), a threat map, and an activity log. The ``Call Now'' button places a SIP-over-UDP voice call to the on-call responder; the ``ACTIVATE'' button on the suppressor panel fires the acoustic extinguisher manually; the suppressor also fires automatically on a confirmed small-flame detection.}
+\label{fig:fireguard}
+\end{figure}
+
+The detector is implemented in \texttt{src/lib/fire-detector.ts}. It uses onnxruntime-web to load a YOLOv8n model exported to ONNX format, with the WASM binaries served from \texttt{/onnx/} on the application's public path. The model expects a 320$\times$320 RGB input normalised to 0 to 1, and produces a tensor of shape $[1, 6, 2100]$ from which the post-processing extracts bounding boxes, class scores (fire, smoke), and applies non-maximum suppression with an Intersection over Union threshold of 0.45. The heuristic fallback is a TypeScript port of the Celik and Demirel rule set, extended with a four-connectivity connected-component labelling pass to produce bounding boxes.
+
+The SIP caller is implemented in \texttt{src/lib/sip-caller.ts} and \texttt{src/lib/sip-voice-call.ts}. It uses Node's \texttt{dgram} module to send raw UDP SIP messages to the configured SIP server, with full digest-authentication support for the REGISTER and INVITE transactions. The caller is registered once at server start and reused across requests. When a call is placed, the caller sends REGISTER, awaits the 401 challenge, sends the authenticated REGISTER, awaits the 200 OK, sends INVITE, awaits the 401 challenge, sends the authenticated INVITE, awaits the 100 Trying, 180 Ringing, and 200 OK, sends ACK, and then streams a $\mu$-law-encoded voice prompt over RTP to the peer's advertised media port. The call is terminated with BYE after a configurable hold time (default 15 seconds). The voice prompt is generated by the z-ai-web-dev-sdk text-to-speech service, converted from WAV to G.711 $\mu$-law, and streamed in 20-millisecond packets.
+
+The settings dialog, shown in Figure~\ref{fig:fireguard-settings}, lets the operator configure multiple SIP providers, set the target phone number, override the GPS coordinates, and connect the dashboard to the FireServiceBD dispatch portal. The settings dialog also exposes the confidence threshold, the call cooldown, and the manual location override.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{screenshots/fireguardbd_settings_open.png}
+\caption{The FireGuard settings dialog. The operator can register multiple SIP providers, set the target phone number, and override the GPS coordinates used in the voice prompt.}
+\label{fig:fireguard-settings}
+\end{figure}
+
+The incident-report dialog, shown in Figure~\ref{fig:fireguard-report}, lets the operator file a manual report directly into the FireServiceBD dispatch portal, bypassing the detection pipeline. The report includes the threat type, the GPS coordinates, a free-text description, and an optional photo. The dialog is used both for false-alarm closure and for incidents observed by a human before the detector has caught up.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{screenshots/fireguardbd_report.png}
+\caption{The FireGuard incident-report dialog, which files a manual report into the FireServiceBD dispatch portal. The dialog supports threat type, GPS coordinates, free-text description, and an optional photo.}
+\label{fig:fireguard-report}
+\end{figure}
+
+\subsubsection{Suppression Layer}
+
+The suppression layer is implemented as a React component (\texttt{src/components/dashboard/wave-generator.tsx}) that uses the browser's \textbf{Web Audio API} to drive a sine-wave oscillator at a configurable frequency and intensity. The oscillator's output is routed to the default audio output, which in a deployment scenario is connected to a 50-watt public-address loudspeaker through a class-D amplifier. The component exposes three controls to the operator: a \textbf{frequency slider} (20 to 100 Hz, with the 30 to 60 Hz band marked as optimal), a \textbf{wave-type selector} (sine, square, sawtooth, triangle, with sine as the recommended default), and an \textbf{intensity slider} (0 to 200 percent, with the gain capped at 1.0 to protect the loudspeaker). The component also exposes an \textbf{ACTIVATE} button that fires the oscillator for a configurable duration (default 10 seconds).
+
+The suppression layer is wired into the detection pipeline through the \texttt{on\_frame} callback shown in Listing~\ref{lst:detect}. When the detection layer confirms a fire and the largest bounding box is below 15 percent of the frame area, the suppressor fires automatically at 45 Hz, 100 percent intensity, for 10 seconds, in parallel with the SIP call and the mesh flood. The suppressor's activation is logged in the activity log and is included as a \texttt{suppressor\_fired} field in the incident JSON, so that the dispatch portal can inform the arriving crew that an acoustic suppression was attempted.
+
+The acoustic-suppression mechanism, drawing on the work of Kim and Park \cite{kim2015acoustic} and McKinney et al. \cite{mckinney2019sonic}, can be summarised as follows. The low-frequency oscillating flow at the flame base thins the flame front below the \textbf{quenching thickness} (the minimum thickness at which a flame can sustain combustion), while the periodic pressure variation disrupts the \textbf{heat-feedback loop} between the flame and the fuel surface. The combined effect is that the flame's local burning rate drops below the sustenance threshold, and the flame goes out. The mechanism is most effective in the 30 to 60 Hz band because the wavelength at those frequencies (5.7 to 11.4 metres in air) is large relative to the flame, which produces a near-uniform oscillating flow across the flame base. Below 30 Hz, the loudspeaker's efficiency drops; above 60 Hz, the wavelength becomes short enough that the flame experiences spatially varying flow, which is less effective at thinning the front.
+
+The suppression layer was evaluated on a 15-cm alcohol pan fire at 45 Hz, 100 percent intensity, with a sine wave, and a mean extinction time of 4.6 seconds was observed over 20 trials, with no reignition for at least 30 seconds after the sound field was removed. The full evaluation is reported in Chapter 4.
+
+\subsubsection{Relay Layer}
+
+The relay layer has two components: the SIP caller described above, and a peer-to-peer mesh of OpenWrt routers that floods compact JSON incident alerts when the SIP call cannot complete or in parallel with the SIP call. The mesh relay is a fork of the Mesh-Chat OpenWrt package \cite{meshchat2026}, extended with three changes.
+
+The first change is the message schema. Mesh-Chat floods free-text chat messages with fields \texttt{id, ts, from, from\_router, router\_name, text, hops}. The fork adds an optional \texttt{incident} field, which carries a JSON object matching the dispatch layer's incident schema. When a router receives a message with an \texttt{incident} field, it forwards the message to its local dispatch portal endpoint (configured via UCI) in addition to displaying it in the chat UI. The dispatch portal's REST endpoint accepts the message and creates an incident record.
+
+The second change is Ed25519 message signing. The fork adds an \texttt{alg}, \texttt{pk}, and \texttt{sig} field to every message, computed over the canonical concatenation of \texttt{from || ts || text || from\_router || id}. The first time the daemon sees a new \texttt{(user, pk)} pair, it records the public key in \texttt{/var/lib/mesh-chat/keys/<user>}. Subsequent messages from that user must be signed by the same key; mismatches are dropped and logged. The signing uses OpenWrt's existing \texttt{usign} tool, which is already shipped for opkg signature verification, so no new cryptographic dependency is introduced.
+
+The third change is the gossip-based flooding protocol. The fork replaces Mesh-Chat's blind flood with a push-pull epidemic gossip protocol, in which each router forwards a new message to a random subset of $f=3$ peers and runs an anti-entropy digest exchange every 30 seconds. The full protocol is documented in the Mesh-Chat paper and is not reproduced here. The mesh relay was evaluated on a 30-node testbed; the results are reported in Chapter 4. Figure~\ref{fig:mesh_topology} illustrates the topology of a small mesh in which the source router's uplink has been severed and the alert must traverse three hops to reach a router with a working uplink.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/fig3_mesh_topology.png}
+\caption{Mesh-relay topology on a small building floor plan. Routers R1 through R8 are connected by Wi-Fi links (dashed lines). Router R1, attached to the detection layer, has lost its uplink (red X). Router R6 has a working uplink to the dispatch portal. An incident alert packet traverses the mesh from R1 to R6 in three hops, with the gossip protocol ensuring delivery even when intermediate links drop packets.}
+\label{fig:mesh_topology}
+\end{figure}
+
+\subsubsection{Dispatch Layer}
+
+The dispatch layer is a Next.js 16 application built with TypeScript, React 19, Tailwind CSS 4, shadcn/ui, and Prisma. The schema is PostgreSQL-backed and consists of nine models: \texttt{User}, \texttt{Incident}, \texttt{IncidentEvent}, \texttt{LicenseApplication}, \texttt{Complaint}, \texttt{Volunteer}, \texttt{TrainingEnrollment}, \texttt{Inspection}, \texttt{Notification}, and \texttt{AuditLog}. The \texttt{Incident} model is the central entity; its fields are listed in Table~\ref{tab:incident}.
+
+\begin{table}[H]
+\centering
+\caption{Fields of the shared incident schema. The same object is produced by the detection layer, flooded across the mesh relay, and ingested by the dispatch portal.}
+\label{tab:incident}
+\small
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\textbf{Field} & \textbf{Type} & \textbf{Description} \\
+\hline
+\texttt{id} & String & CUID, generated by the dispatch portal on ingestion. \\
+\hline
+\texttt{refNo} & String & Human-readable reference, e.g.\ \texttt{INC-20462}. \\
+\hline
+\texttt{type} & String & One of: fire, smoke, building-collapse, road-accident, gas-leak, electrical, flood, other. \\
+\hline
+\texttt{severity} & String & low, medium, high, critical. \\
+\hline
+\texttt{status} & String & reported, dispatched, on-scene, contained, resolved. \\
+\hline
+\texttt{location} & String & Free-text address or landmark. \\
+\hline
+\texttt{district} & String & One of the 64 districts of Bangladesh. \\
+\hline
+\texttt{description} & String & Free-text, populated by the detection layer with the bounding-box summary. \\
+\hline
+\texttt{lat, lng} & Float & WGS-84 coordinates, populated by the detection layer's GPS reading. \\
+\hline
+\texttt{mediaUrls} & String & JSON array of photo or video URLs, populated by the citizen-facing SOS channel. \\
+\hline
+\texttt{reporterId} & String & Optional, when the report came from a registered user. \\
+\hline
+\texttt{assignedStationId} & String & Set by the dispatch portal's station-assignment algorithm. \\
+\hline
+\texttt{assignedVehicles} & String & JSON array of vehicle IDs. \\
+\hline
+\texttt{escalationLevel} & Int & 1 to 4, incremented by the escalation algorithm. \\
+\hline
+\texttt{agencyResponses} & String & JSON object of agency name to response status. \\
+\hline
+\texttt{suppressorFired} & Bool & True if the acoustic suppressor was activated on this incident. \\
+\hline
+\texttt{suppressorDuration} & Float & Seconds the suppressor was active, 0 if not fired. \\
+\hline
+\texttt{dispatchedAt, onsceneAt, containedAt, resolvedAt} & DateTime & Lifecycle timestamps. \\
+\hline
+\texttt{createdAt, updatedAt} & DateTime & Audit timestamps. \\
+\hline
+\end{tabularx}
+\end{table}
+
+The portal's user interface is organised into ten modules, accessible from a left-hand sidebar: Emergency Services, Citizen Services, Complaints, Safety Awareness, Training and Education, Volunteer, Fire Stations, Disaster Management, Notifications, and My Account. Three additional modules, Admin Portal, Officer Module, and ERCC Command, are access-controlled and require login. The portal is bilingual, with full English and Bengali interfaces, and supports both light and dark themes. The home page of the portal is shown in Figure~\ref{fig:fireservice-home}.
+
+The end-to-end dispatch sequence, from a fire detection at the camera to the on-scene acknowledgement by the responding crew, is shown in Figure~\ref{fig:dispatch_sequence}. The two parallel paths at the top of the diagram, the SIP call to the fire station and the mesh flood to the dispatch portal, ensure that the alert reaches the dispatcher over at least one channel even when one of the two networks is unavailable. The suppression layer fires in parallel with both, acting on the fire while the alert is in flight.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/fig4_dispatch_sequence.png}
+\caption{The end-to-end dispatch sequence. The detector fires on a confirmed detection (confidence $\geq$ 0.8 for two consecutive frames). If the bounding-box area is below 15 percent of the frame, the acoustic suppressor is activated in parallel with the SIP voice call to the on-call responder and the mesh-flood of the incident JSON to the dispatch portal. The portal runs the automatic station-assignment algorithm and notifies the assigned station, which dispatches a vehicle and crew. Lifecycle events (on-scene, contained, resolved) are recorded against the incident record as they occur.}
+\label{fig:dispatch_sequence}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{screenshots/fireservicebd_full.png}
+\caption{The FireServiceBD dispatch portal home page, deployed at \texttt{https://fireservicebd.vercel.app/}. The hero section displays the headline ``When Seconds Count, We Respond'' with quick-action buttons. Below are the live-incidents list, the nearby-stations panel, the quick-actions tiles, and the report-an-emergency form.}
+\label{fig:fireservice-home}
+\end{figure}
+
+The SOS Emergency modal, shown in Figure~\ref{fig:fireservice-sos}, is a citizen-facing dialog that lets a member of the public trigger an SOS with a single tap. The modal captures the device's GPS coordinates, sends them to the dispatch portal with a default threat type of ``other'' and a severity of ``high'', and displays the resulting incident reference number on the screen. The SOS channel is intended for use by a person who is in immediate danger and does not have time to fill out the full report form.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{screenshots/fireservicebd_sos.png}
+\caption{The SOS Emergency modal on the FireServiceBD dispatch portal. A single tap captures the device's GPS coordinates and creates a high-severity incident record in the dispatch workflow.}
+\label{fig:fireservice-sos}
+\end{figure}
+
+The Fire Stations module, shown in Figure~\ref{fig:fireservice-stations}, lists the fire stations in the directory with their district, address, and contact details, and displays them as markers on an OpenStreetMap base map. Each station's record shows the number of vehicles, the number of crew, and the current on-shift status. The module is the source of truth for the station-assignment algorithm.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{screenshots/fireservicebd_stations.png}
+\caption{The Fire Stations module of the FireServiceBD dispatch portal. The module lists the fire stations in the directory and displays them as markers on an OpenStreetMap base map.}
+\label{fig:fireservice-stations}
+\end{figure}
+
+The Emergency Services module, shown in Figure~\ref{fig:fireservice-emergency}, is the officer-facing view of the live-incident queue. Each incident is displayed as a card with its reference number, type, severity, status, location, and the assigned station. Officers can acknowledge, dispatch, mark on-scene, mark contained, and mark resolved from this view, and each transition is logged as an \texttt{IncidentEvent} on the incident record.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{screenshots/fireservicebd_emergency_full.png}
+\caption{The Emergency Services module of the FireServiceBD dispatch portal, showing the live-incident queue and the officer-facing incident-management controls.}
+\label{fig:fireservice-emergency}
+\end{figure}
+
+The Disaster Management module, shown in Figure~\ref{fig:fireservice-disaster}, is a coordination view for large-scale incidents such as floods, cyclones, and building collapses that require multi-agency response. The module displays the current agency responses, the escalation level, and a structured handoff log for each agency.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{screenshots/fireservicebd_disaster.png}
+\caption{The Disaster Management module of the FireServiceBD dispatch portal, showing multi-agency coordination for large-scale incidents.}
+\label{fig:fireservice-disaster}
+\end{figure}
+
+\subsection{Summary}
+
+This chapter has described the integrated framework in detail. The framework has four layers: a detection layer that runs a YOLOv8n-based fire and smoke detector in the browser, a suppression layer that drives an acoustic-wave extinguisher in the 30 to 60 Hz band, a relay layer that combines a SIP-over-UDP voice call with a peer-to-peer mesh flood, and a dispatch layer that mirrors the operational practice of the Bangladesh Fire Service and Civil Defence. The four layers share a single incident schema, summarised in Table~\ref{tab:incident}, and exchange events through a REST API and a server-sent event stream. The next chapter presents the experimental setup and the empirical evaluation.
