@@ -1,0 +1,124 @@
+\documentclass{article}
+\usepackage{lmodern}
+\usepackage[utf8]{inputenc}
+\usepackage{setspace}
+\usepackage{etoolbox}
+
+\usepackage[export]{adjustbox}
+\renewcommand{\thefigure}{\arabic{section}.\arabic{figure}}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{acronym}
+\usepackage{tabularx}
+\usepackage{sectsty}
+\usepackage{cite}
+\usepackage[table]{xcolor}
+\usepackage{array}
+\usepackage{colortbl}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage[T1]{fontenc}
+
+\definecolor{headerblue}{RGB}{47,84,150}
+\definecolor{taskblue}{RGB}{155,194,230}
+\definecolor{codebg}{RGB}{245,245,248}
+\definecolor{codekw}{RGB}{30,80,160}
+\definecolor{codestr}{RGB}{160,40,40}
+\definecolor{codecom}{RGB}{110,110,110}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  keywordstyle=\color{codekw}\bfseries,
+  stringstyle=\color{codestr},
+  commentstyle=\color{codecom}\itshape,
+  breaklines=true,
+  showstringspaces=false,
+  frame=single,
+  rulecolor=\color{codecom},
+  numbers=left,
+  numberstyle=\tiny\color{codecom},
+  captionpos=b,
+  tabsize=2,
+}
+
+\sectionfont{\fontsize{16}{16}\selectfont}
+\subsectionfont{\fontsize{14}{14}\selectfont}
+\subsubsectionfont{\fontsize{14}{14}\selectfont}
+\paragraphfont{\fontsize{12}{12}\selectfont}
+\subparagraphfont{\fontsize{12}{12}\selectfont}
+
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks,
+    citecolor=black,
+    filecolor=black,
+    linkcolor=black,
+    urlcolor=black
+}
+
+\usepackage[a4paper,left=3cm,right=3cm,top=3cm,bottom=2.5cm]{geometry}
+\begin{document}
+\doublespacing
+\input{cover_page}
+\tableofcontents
+\thispagestyle{empty}
+\cleardoublepage
+\pagenumbering{roman}
+\setcounter{page}{3}
+
+\listoffigures
+\cleardoublepage
+
+\listoftables
+\cleardoublepage
+
+\input{Acronyms}
+\addcontentsline{toc}{section}{List of Abbreviations and Acronyms}
+\cleardoublepage
+
+\input{Declaration}
+\addcontentsline{toc}{section}{Declaration}
+\cleardoublepage
+
+\input{Approval}
+\addcontentsline{toc}{section}{Approval}
+\cleardoublepage
+
+\input{Dedication}
+\addcontentsline{toc}{section}{Dedication}
+\cleardoublepage
+
+\input{Acknowledgement}
+\addcontentsline{toc}{section}{Acknowledgement}
+\cleardoublepage
+
+\input{Abstruct}
+\addcontentsline{toc}{section}{Abstract}
+\cleardoublepage
+
+\pagenumbering{arabic}
+\setcounter{page}{1}
+\input{chapter1}
+\cleardoublepage
+\input{chapter2}
+\cleardoublepage
+\input{chapter3}
+\cleardoublepage
+\input{chapter4}
+\cleardoublepage
+\input{chapter5}
+\cleardoublepage
+\input{chapter6}
+\cleardoublepage
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{section}{References}
+\input{Refe}
+\cleardoublepage
+\end{document}
